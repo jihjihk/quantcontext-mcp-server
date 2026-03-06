@@ -33,6 +33,22 @@ FALLBACK_SP500_TICKERS = [
     "MU", "SCHW", "BA", "PGR", "COP", "PANW", "ADI", "ETN", "MDLZ", "TMUS",
 ]
 
+FALLBACK_NASDAQ100_TICKERS = [
+    "AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "META", "AVGO", "TSLA", "COST", "NFLX",
+    "AMD", "ADBE", "CSCO", "INTU", "QCOM", "TXN", "AMGN", "ISRG", "BKNG", "AMAT",
+    "LRCX", "MU", "PANW", "ADI", "MDLZ", "TMUS", "ADP", "GILD", "VRTX", "REGN",
+    "SNPS", "CDNS", "KLAC", "MRVL", "FTNT", "ABNB", "TEAM", "DXCM", "ILMN", "BIIB",
+    "ZS", "CRWD", "WDAY", "MNST", "ODFL", "CSGP", "ANSS", "CPRT", "PCAR", "ON",
+]
+
+FALLBACK_RUSSELL2000_TICKERS = [
+    "SMCI", "CRUS", "CARG", "LUMN", "IRBT", "SONO", "CHGG", "BGFV", "PRTS", "RGS",
+    "BLMN", "CAKE", "DINE", "JACK", "BJRI", "PLAY", "DIN", "TXRH", "EAT", "RUTH",
+    "SHAK", "WING", "LOCO", "TAST", "NDLS", "ARCO", "FRGI", "PTLO", "KRUS", "BROS",
+    "CAVA", "SG", "RVLV", "BOOT", "DBI", "SCVL", "GCO", "CAL", "CRI", "OXM",
+    "GIII", "LEVI", "HBI", "PVH", "URBN", "ANF", "AEO", "EXPR", "TLYS", "ZUMZ",
+]
+
 
 def _normalize_index(df: pd.DataFrame) -> pd.DataFrame:
     out = df.copy()
@@ -180,6 +196,34 @@ def fetch_sp500_tickers() -> list[str]:
     return tickers
 
 
+NASDAQ100_CACHE_PATH = CACHE_DIR / "nasdaq100_tickers.json"
+
+
+def fetch_nasdaq100_tickers() -> list[str]:
+    """Return current Nasdaq-100 tickers. Cache result."""
+    if not NASDAQ100_CACHE_PATH.exists():
+        _try_download_remote_cache("nasdaq100_tickers.json", NASDAQ100_CACHE_PATH)
+
+    if NASDAQ100_CACHE_PATH.exists():
+        with open(NASDAQ100_CACHE_PATH) as f:
+            return json.load(f)
+
+    try:
+        table = pd.read_html("https://en.wikipedia.org/wiki/Nasdaq-100")[4]
+        tickers = table["Ticker"].str.replace(".", "-", regex=False).tolist()
+    except Exception:
+        tickers = FALLBACK_NASDAQ100_TICKERS
+
+    with open(NASDAQ100_CACHE_PATH, "w") as f:
+        json.dump(tickers, f)
+    return tickers
+
+
+def fetch_russell2000_tickers() -> list[str]:
+    """Return representative Russell 2000 tickers (fallback list only)."""
+    return list(FALLBACK_RUSSELL2000_TICKERS)
+
+
 def fetch_financials(ticker: str) -> dict:
     """Fetch basic financials and cache by ticker at engine/.cache/financials/{ticker}.json."""
     cache_path = FINANCIALS_DIR / f"{ticker}.json"
@@ -214,6 +258,104 @@ def fetch_financials(ticker: str) -> dict:
     return result
 
 
+def enrich_with_price_data(df: pd.DataFrame, date: str) -> pd.DataFrame:
+    """Enrich a universe DataFrame with price-derived columns.
+
+    Downloads ~300 days of price history ending at *date* for each ticker
+    in *df* and computes momentum, volatility, and technical indicators.
+    """
+    import numpy as np
+
+    if "ticker" not in df.columns or df.empty:
+        return df
+
+    tickers = df["ticker"].tolist()
+    end_ts = pd.Timestamp(date)
+    start_ts = end_ts - pd.Timedelta(days=420)  # ~300 trading days buffer
+
+    try:
+        prices = fetch_prices(tickers, start_ts.strftime("%Y-%m-%d"), date)
+    except Exception:
+        return df
+
+    # Build a dict of ticker -> computed values
+    records: dict[str, dict] = {}
+    for ticker in tickers:
+        rec: dict = {}
+        if ticker not in prices.columns:
+            records[ticker] = rec
+            continue
+
+        series = prices[ticker].dropna()
+        if len(series) < 30:
+            records[ticker] = rec
+            continue
+
+        last_price = float(series.iloc[-1])
+
+        # N-day total returns
+        for n, col in [(21, "return_21d"), (63, "return_63d"),
+                        (126, "return_126d"), (252, "return_252d")]:
+            if len(series) > n:
+                rec[col] = float(series.iloc[-1] / series.iloc[-n] - 1)
+
+        # 20-day annualized volatility
+        if len(series) > 21:
+            daily_ret = series.pct_change().dropna().iloc[-20:]
+            rec["volatility_20d"] = float(daily_ret.std() * np.sqrt(252))
+
+        # RSI 14
+        if len(series) > 15:
+            delta = series.diff()
+            gain = delta.where(delta > 0, 0).rolling(14).mean()
+            loss = (-delta.where(delta < 0, 0)).rolling(14).mean()
+            rs = gain / loss
+            rsi = 100 - (100 / (1 + rs))
+            last_rsi = rsi.iloc[-1]
+            if pd.notna(last_rsi):
+                rec["rsi_14"] = float(last_rsi)
+
+        # SMA 50, SMA 200
+        if len(series) >= 50:
+            rec["sma_50"] = float(series.rolling(50).mean().iloc[-1])
+        if len(series) >= 200:
+            rec["sma_200"] = float(series.rolling(200).mean().iloc[-1])
+
+        # Bollinger band position (20-day)
+        if len(series) >= 20:
+            sma20 = series.rolling(20).mean()
+            std20 = series.rolling(20).std()
+            bb_width = 4 * std20
+            bb_pos = (series - (sma20 - 2 * std20)) / bb_width
+            last_bb = bb_pos.iloc[-1]
+            if pd.notna(last_bb):
+                rec["bb_position"] = float(last_bb)
+
+        # Z-score 60d
+        if len(series) >= 60:
+            rolling_mean = series.rolling(60).mean()
+            rolling_std = series.rolling(60).std()
+            last_std = rolling_std.iloc[-1]
+            if pd.notna(last_std) and last_std > 0:
+                rec["z_score_60d"] = float(
+                    (last_price - rolling_mean.iloc[-1]) / last_std
+                )
+
+        records[ticker] = rec
+
+    # Merge computed columns into df
+    enrichment = pd.DataFrame.from_dict(records, orient="index")
+    if enrichment.empty:
+        return df
+
+    df = df.set_index("ticker")
+    for col in enrichment.columns:
+        df[col] = enrichment[col]
+    df = df.reset_index()
+
+    return df
+
+
 def get_universe(date: str, universe: str = "sp500") -> pd.DataFrame:
     """Return a DataFrame of all tickers in the universe with fundamentals.
 
@@ -222,6 +364,10 @@ def get_universe(date: str, universe: str = "sp500") -> pd.DataFrame:
     """
     if universe == "sp500":
         tickers = fetch_sp500_tickers()
+    elif universe == "nasdaq100":
+        tickers = fetch_nasdaq100_tickers()
+    elif universe == "russell2000":
+        tickers = fetch_russell2000_tickers()
     else:
         tickers = FALLBACK_SP500_TICKERS[:90]
 
@@ -234,6 +380,7 @@ def get_universe(date: str, universe: str = "sp500") -> pd.DataFrame:
             continue
 
     df = pd.DataFrame(rows)
+    df = enrich_with_price_data(df, date)
     return df
 
 

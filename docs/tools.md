@@ -22,7 +22,7 @@
 {"pe_lt": 15, "roe_gt": 12, "debt_equity_lt": 1.0, "revenue_growth_gt": 0.05}
 ```
 
-**`quality_screen`** — High-quality companies
+**`quality_screen`** — Profitability + balance sheet health (ROE, margins, leverage)
 ```json
 {"roe_gt": 15, "debt_equity_lt": 0.5, "profit_margin_gt": 0.1}
 ```

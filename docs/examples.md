@@ -22,7 +22,7 @@ Three complete examples showing how an AI agent uses QuantContext tools. Each ex
 }
 ```
 
-**Tool returns:**
+**Tool returns** (illustrative, from a screen run on 2025-03-05 — your results will differ)**:**
 ```json
 {
   "screen_type": "fundamental_screen",

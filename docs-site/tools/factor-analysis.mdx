@@ -53,10 +53,10 @@ description: Decompose strategy returns into Fama-French factors using OLS regre
 ### Alpha
 
 <Warning>
-  Alpha t-stat must be `|t| >= 2` to be statistically significant at ~95% confidence. Below 2, the alpha could be noise from a short backtest period.
+  For a single pre-specified strategy, `|t| >= 2` (~95% confidence) is a reasonable significance threshold. If the strategy was discovered by testing many parameter combinations, a higher bar applies — Harvey, Liu & Zhu (2016) suggest t > 3.0 after multiple testing correction.
 </Warning>
 
-- **Significant alpha** (`|t| >= 2`):The strategy has genuine edge beyond systematic factor exposure. The alpha cannot be easily replicated with factor ETFs.
+- **Significant alpha** (`|t| >= 2`):The strategy generates returns beyond systematic factor exposure. The alpha cannot be easily replicated with factor ETFs.
 - **Insignificant alpha** (`|t| < 2`):Returns may be explained by factor exposure alone. Extending the backtest period may resolve this.
 
 ### Factor Loadings
@@ -68,7 +68,7 @@ description: Decompose strategy returns into Fama-French factors using OLS regre
 | `HML` | Value factor. Positive = value tilt (cheap stocks). Negative = growth tilt. |
 | `Mom` | Momentum factor. Positive = momentum tilt (recent winners). |
 
-The magnitude of each loading indicates exposure strength. A loading of 0.5 on HML means roughly half the excess return variance is explained by the value factor.
+The magnitude of each loading indicates exposure strength. A loading of 0.5 on HML means 0.5 units of value factor exposure per unit of portfolio return.
 
 ### R-squared
 

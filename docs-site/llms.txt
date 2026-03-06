@@ -32,7 +32,7 @@ Pass full_equity_curve from backtest_strategy directly into factor_analysis.
 
 ## Performance
 - First call: ~10s (downloads market data)
-- Screening: <1s (cached)
+- Screening: under 1s (cached)
 - Backtesting: 3–8s (cached)
 
 ## Links

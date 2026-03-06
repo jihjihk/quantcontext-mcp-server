@@ -37,7 +37,7 @@ Ask Claude:
 
 > "Screen S&P 500 for value stocks with PE under 15 and ROE above 12%"
 
-Claude will call `screen_stocks` and return a ranked list of candidates with actual market data. The first call downloads and caches market data (~10s). Subsequent calls use the cache (<1s for screening, 3–8s for backtesting).
+Claude will call `screen_stocks` and return a ranked list of candidates with actual market data. The first call downloads and caches market data (~10s). Subsequent calls use the cache (under 1s for screening, 3–8s for backtesting).
 
 ## Try the full workflow
 

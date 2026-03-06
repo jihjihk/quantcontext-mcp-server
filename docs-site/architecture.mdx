@@ -44,11 +44,7 @@ QuantContext enforces a strict boundary between what LLMs do and what code does:
 
 ## Why Determinism Matters for Trading
 
-Ask an LLM to calculate a Sharpe ratio and you will get a different number every time. The number will look plausible. It will be confidently presented. It will be wrong.
-
-This is fine for creative writing. It is catastrophic for trading.
-
-QuantContext ensures every number returned to an agent is:
+LLMs hallucinate numbers. QuantContext ensures every number returned to an agent is:
 
 1. **Computed from actual market data**:not generated, estimated, or hallucinated
 2. **Deterministic**:same inputs produce identical outputs, always
@@ -79,7 +75,7 @@ QuantContext ensures every number returned to an agent is:
               └─────────────────────┘
     ```
 
-    The `pipeline_executor.py` module maps pipeline stages to skill functions from `SKILL_REGISTRY`. Each skill receives a pandas DataFrame and returns a filtered/ranked DataFrame. Stages execute sequentially:stage N's output is stage N+1's input.
+    Pipeline stages map to skill functions from `SKILL_REGISTRY`. Each skill receives a pandas DataFrame and returns a filtered/ranked DataFrame. Stages execute sequentially.
   </Accordion>
 
   <Accordion title="backtest_strategy">
@@ -112,7 +108,7 @@ QuantContext ensures every number returned to an agent is:
               └─────────────────────┘
     ```
 
-    A rebalance-loop engine. On each rebalance date it re-runs the full screening pipeline, computes target weights, and executes trades. Between rebalance dates it tracks daily P&L and enforces risk controls.
+    Rebalance-loop engine. On each rebalance date: re-run pipeline, compute target weights, execute trades. Between rebalances: daily P&L tracking and risk controls.
   </Accordion>
 
   <Accordion title="factor_analysis">
@@ -138,7 +134,7 @@ QuantContext ensures every number returned to an agent is:
               └─────────────────────┘
     ```
 
-    Uses manual OLS via numpy linear algebra. Avoids a statsmodels dependency while producing identical results. The regression decomposes excess returns into four systematic factors.
+    Manual OLS via numpy. No statsmodels dependency. Decomposes excess returns into four systematic factors.
   </Accordion>
 </AccordionGroup>
 
@@ -153,7 +149,7 @@ QuantContext ensures every number returned to an agent is:
 
 **First call:** Downloads market data (~10s for S&P 500). Subsequent calls use the cache.
 
-**Performance:** Screening <1s, backtesting 3–8s.
+**Performance:** Screening under 1s, backtesting 3–8s.
 
 **Total disk usage:** ~50MB for full S&P 500 coverage.
 

@@ -1,0 +1,386 @@
+@import "tailwindcss";
+
+@source "../components";
+
+@theme {
+  --font-display: "Instrument Serif", serif;
+  --font-body: "Inter", sans-serif;
+  --font-mono: "JetBrains Mono", monospace;
+
+  --color-page: #fafafa;
+  --color-surface: #ffffff;
+  --color-code: #f1f5f9;
+  --color-code-dark: #1e293b;
+
+  --color-primary: #0f172a;
+  --color-secondary: #475569;
+  --color-muted: #94a3b8;
+
+  --color-border: #e2e8f0;
+  --color-border-subtle: #f1f5f9;
+
+  --color-accent: #2563eb;
+  --color-accent-light: #eff6ff;
+  --color-positive: #16a34a;
+  --color-negative: #dc2626;
+
+  /* Aliases used by components */
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-tertiary: #94a3b8;
+  --bg-surface: #ffffff;
+  --bg-page: #fafafa;
+  --bg-code-dark: #1e293b;
+  --border-default: #e2e8f0;
+}
+
+/* ── Base ── */
+
+html {
+  scroll-behavior: smooth;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-body);
+  color: var(--color-primary);
+  background: var(--color-page);
+}
+
+::selection {
+  background: var(--color-accent);
+  color: white;
+}
+
+/* ── Utility classes for our design tokens ── */
+
+.font-display { font-family: var(--font-display); }
+.font-body    { font-family: var(--font-body); }
+.font-mono    { font-family: var(--font-mono); }
+
+.text-primary   { color: var(--color-primary); }
+.text-secondary { color: var(--color-secondary); }
+.text-muted     { color: var(--color-muted); }
+.text-accent    { color: var(--color-accent); }
+.text-positive  { color: var(--color-positive); }
+
+.bg-page        { background: var(--color-page); }
+.bg-surface     { background: var(--color-surface); }
+.bg-code        { background: var(--color-code); }
+.bg-code-dark   { background: var(--color-code-dark); }
+.bg-accent      { background: var(--color-accent); }
+.bg-accent-light { background: var(--color-accent-light); }
+
+.border-default { border-color: var(--color-border); }
+.border-subtle  { border-color: var(--color-border-subtle); }
+
+/* ── Section label (monospace uppercase) ── */
+.section-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--color-muted);
+}
+
+/* ── Section heading (serif italic) ── */
+.section-heading {
+  font-family: var(--font-display);
+  color: var(--color-primary);
+}
+
+/* ── Code badge (tool name pills) ── */
+.tool-badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--color-accent-light);
+  color: var(--color-accent);
+}
+
+/* ── Install snippet row ── */
+.install-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+}
+
+.install-row code {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--color-primary);
+  flex: 1;
+}
+
+.install-row .dollar {
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--color-muted);
+  user-select: none;
+}
+
+/* ── Copy button ── */
+.copy-btn {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--color-border);
+  background: var(--color-page);
+  color: var(--color-secondary);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.copy-btn:hover { border-color: var(--color-secondary); }
+.copy-btn.copied {
+  color: var(--color-positive);
+  border-color: var(--color-positive);
+  background: #f0fdf4;
+}
+
+/* ── Ghost & solid buttons ── */
+.btn-solid {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 10px 20px;
+  border-radius: 6px;
+  background: var(--color-primary);
+  color: white;
+  text-decoration: none;
+  transition: opacity 0.15s;
+}
+.btn-solid:hover { opacity: 0.85; }
+
+.btn-ghost {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 10px 20px;
+  border-radius: 6px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-secondary);
+  text-decoration: none;
+  transition: all 0.15s;
+}
+.btn-ghost:hover {
+  border-color: var(--color-secondary);
+  color: var(--color-primary);
+}
+
+/* ── Terminal window ── */
+.terminal {
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+  background: var(--color-code-dark);
+  box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+}
+
+.terminal-chrome {
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.06);
+}
+
+.terminal-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.terminal-body {
+  padding: 20px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.7;
+  color: rgba(255,255,255,0.7);
+}
+
+.terminal-body .prompt {
+  color: rgba(255,255,255,0.45);
+}
+
+.terminal-body .green {
+  color: #4ade80;
+}
+
+.terminal-body .dim {
+  color: rgba(255,255,255,0.3);
+}
+
+.terminal-body table {
+  width: 100%;
+  margin-top: 8px;
+  border-spacing: 0;
+}
+
+.terminal-body td {
+  padding: 1px 12px 1px 0;
+}
+
+/* ── Stat number ── */
+.stat-value {
+  font-family: var(--font-display);
+  font-size: 28px;
+  color: var(--color-primary);
+  line-height: 1.1;
+}
+
+.stat-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-muted);
+  margin-top: 2px;
+}
+
+/* ── Tool card ── */
+.tool-card {
+  padding: 24px;
+  border-radius: 10px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  text-align: left;
+  cursor: pointer;
+  transition: all 0.2s;
+  width: 100%;
+}
+.tool-card:hover { border-color: var(--color-accent); }
+.tool-card.active {
+  border-color: var(--color-accent);
+  background: var(--color-accent-light);
+}
+
+.tool-card .tool-id {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-accent);
+  margin-bottom: 6px;
+}
+
+.tool-card h3 {
+  font-family: var(--font-display);
+  font-size: 16px;
+  color: var(--color-primary);
+  margin-bottom: 6px;
+}
+
+.tool-card p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--color-secondary);
+}
+
+.tool-card .toggle {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-muted);
+  margin-top: 14px;
+  display: block;
+}
+
+/* ── Code example block ── */
+.code-example {
+  margin-top: 4px;
+  border-radius: 8px;
+  border: 1px solid var(--color-border);
+  overflow: hidden;
+}
+
+.code-example .code-section {
+  padding: 16px;
+  background: var(--color-code-dark);
+}
+
+.code-example .code-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.3);
+  margin-bottom: 8px;
+}
+
+.code-example pre {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: rgba(255,255,255,0.8);
+  overflow-x: auto;
+  margin: 0;
+}
+
+.code-example .output pre {
+  color: #86efac;
+}
+
+.code-example .divider {
+  height: 1px;
+  background: rgba(255,255,255,0.06);
+}
+
+/* ── Pipeline step card ── */
+.pipeline-card {
+  padding: 24px;
+  border: 1px solid var(--color-border);
+  background: var(--color-page);
+  flex: 1;
+}
+
+.pipeline-card:first-child { border-radius: 10px 0 0 10px; }
+.pipeline-card:last-child  { border-radius: 0 10px 10px 0; }
+.pipeline-card + .pipeline-card { margin-left: -1px; }
+
+.pipeline-card .step-num {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-muted);
+}
+
+.pipeline-card .query {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-style: italic;
+  color: var(--color-secondary);
+  line-height: 1.6;
+  margin: 12px 0;
+}
+
+.pipeline-card .result {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--color-positive);
+}
+
+/* ── Footer link column ── */
+.footer-heading {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--color-muted);
+  margin-bottom: 14px;
+}
+
+.footer-link {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-secondary);
+  text-decoration: none;
+  display: block;
+  padding: 3px 0;
+  transition: color 0.15s;
+}
+.footer-link:hover { color: var(--color-primary); }
+
+/* ── Responsive stacking ── */
+@media (max-width: 768px) {
+  .pipeline-card { border-radius: 10px !important; margin-left: 0 !important; }
+}

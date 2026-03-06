@@ -1,56 +1,28 @@
 @import url("https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap");
 
-/* ── Typography ── */
-:root {
-  --font-display: "Instrument Serif", serif;
-  --font-body: "Inter", sans-serif;
-  --font-mono: "JetBrains Mono", monospace;
-}
+/* ── Mintlify overrides ── */
 
 h1, h2, h3, h4 {
-  font-family: var(--font-display) !important;
+  font-family: "Instrument Serif", serif !important;
   font-weight: 400 !important;
   letter-spacing: -0.01em;
 }
 
 body, p, li, td, th {
-  font-family: var(--font-body) !important;
+  font-family: "Inter", sans-serif !important;
 }
 
-code, pre, kbd, .font-mono {
-  font-family: var(--font-mono) !important;
+code, pre, kbd {
+  font-family: "JetBrains Mono", monospace !important;
   font-size: 0.875em;
 }
 
-/* ── Colors ── */
-:root {
-  --color-positive: #16a34a;
-  --color-negative: #dc2626;
-  --text-primary: #1e293b;
-  --text-secondary: #475569;
-  --text-tertiary: #94a3b8;
-  --border-default: #e2e8f0;
-}
-
-/* ── Borders and surfaces ── */
-.dark\:border-white\/10,
-[data-theme="light"] .border {
-  border-color: #e2e8f0;
-}
-
-/* ── Code blocks ── */
 pre {
   border: 1px solid #e2e8f0 !important;
   border-radius: 8px !important;
 }
 
-/* ── Nav ── */
-nav {
-  border-bottom: 1px solid #e2e8f0;
-}
-
-/* ── Sidebar ── */
 aside {
-  border-right: 1px solid #e2e8f0;
   background: #f8fafc !important;
+  border-right: 1px solid #e2e8f0;
 }

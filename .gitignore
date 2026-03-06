@@ -12,3 +12,11 @@ build/
 .mypy_cache/
 run_server.sh
 /tmp/
+
+# macOS
+.DS_Store
+
+# Node / Next.js
+node_modules/
+.next/
+out/

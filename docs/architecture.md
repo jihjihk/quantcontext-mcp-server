@@ -42,11 +42,7 @@ QuantContext enforces a strict boundary between what LLMs do and what code does:
 
 ## Why Determinism Matters for Trading
 
-Ask an LLM to calculate a Sharpe ratio and you will get a different number every time. The number will look plausible. It will be confidently presented. And it will be wrong.
-
-This is fine for creative writing. It is catastrophic for trading.
-
-QuantContext ensures that every number returned to an agent is:
+LLMs hallucinate numbers. QuantContext ensures every number returned to an agent is:
 1. **Computed from actual market data** — not generated, estimated, or hallucinated
 2. **Deterministic** — same inputs produce identical outputs, always
 3. **Auditable** — the computation path is pure Python with no randomness (except Monte Carlo, which accepts an explicit seed)

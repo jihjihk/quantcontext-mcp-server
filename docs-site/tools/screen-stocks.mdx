@@ -40,7 +40,7 @@ description: Screen a stock universe by quantitative criteria and return ranked 
     All config fields are optional. Omit any you don't want to filter by.
   </Accordion>
 
-  <Accordion title="quality_screen:High-quality companies">
+  <Accordion title="quality_screen:Profitability + balance sheet health">
     ```json
     {
       "roe_gt": 15,
@@ -48,6 +48,7 @@ description: Screen a stock universe by quantitative criteria and return ranked 
       "profit_margin_gt": 0.1
     }
     ```
+    Filters on profitability (ROE, profit margin) and leverage (debt-to-equity). Unlike `fundamental_screen`, this focuses on financial health rather than valuation.
   </Accordion>
 
   <Accordion title="momentum_screen:Rank by price momentum">

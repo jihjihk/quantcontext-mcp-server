@@ -1,0 +1,335 @@
+---
+title: "Methodology"
+description: "How QuantContext computes every number — data sources, algorithms, and statistical methods"
+---
+
+## Theoretical Foundations
+
+QuantContext implements established quantitative finance methods. This page explains what the system computes, why these methods exist, and where they break down.
+
+**Key intellectual lineage:**
+- **Factor investing**: Fama & French (1993), Carhart (1997), Fama & French (2015)
+- **Portfolio construction**: Markowitz (1952), risk parity (Maillard, Roncalli, Teiletche 2010)
+- **Risk measurement**: Artzner et al. (1999) coherent risk measures, Basel frameworks
+- **The factor zoo warning**: Harvey, Liu, Zhu (2016) — over 300 published factors, most don't replicate. A t-stat of 2.0 is no longer sufficient; need t > 3.0 after multiple testing correction.
+
+---
+
+## Data Sources
+
+QuantContext relies entirely on free, public data. No API keys are required.
+
+| Data type | Source | Frequency | Caching |
+|-----------|--------|-----------|---------|
+| **Price data** | Yahoo Finance via `yfinance` | Daily OHLCV | Parquet (CSV fallback) after first download |
+| **Fundamentals** | Yahoo Finance `Ticker.info` | Snapshot | Per-ticker, 24-hour TTL |
+| **Universe lists** | Wikipedia (S&P 500, Nasdaq 100) | Scraped on demand | Cached locally |
+| **Factor data** | Kenneth French Data Library (Dartmouth) | Daily | Downloaded from ZIP, parsed from CSV, cached locally |
+
+**Universe notes:** The S&P 500 and Nasdaq 100 constituent lists are scraped from Wikipedia tables. The Russell 2000 uses a representative sample because no free, reliable constituent list exists. All universe lists are cached locally after the first fetch.
+
+**Factor data details:** The Kenneth French Data Library provides Fama-French 3 factors (Mkt-RF, SMB, HML), Momentum (Mom), and the risk-free rate (RF).
+
+---
+
+## Stock Screening
+
+The `screen_stocks` tool supports seven screen types. Each applies a different methodology to filter or rank stocks from a chosen universe.
+
+### fundamental_screen
+
+General-purpose threshold filter on financial metrics. A stock must pass **all** specified thresholds. Supported filters: PE ratio (max), ROE (min), debt-to-equity (max), and revenue growth (min). Use this when you want to filter on any combination of fundamental criteria.
+
+### quality_screen
+
+Filters specifically for profitability and balance sheet health: high ROE, low leverage (debt-to-equity), and strong profit margins. Use this when the goal is to find financially healthy companies regardless of valuation.
+
+### momentum_screen
+
+Ranks stocks by N-day total return and keeps the top X percentile.
+
+$$
+\text{Momentum}_i = \frac{P_{i,t}}{P_{i,t-N}} - 1
+$$
+
+Stocks are sorted descending by this return. The `top_pct` parameter (e.g., 0.10 for the top 10%) determines how many pass the screen.
+
+**Academic context:** Cross-sectional momentum (Jegadeesh & Titman 1993) is one of the strongest anomalies in finance, earning ~12% annually in the original long-short study, though subsequent research shows significant post-publication decay. Momentum is subject to severe crashes (e.g., 2009 reversal), so it is typically combined with other factors. The standard academic construction skips the most recent month to avoid short-term reversal effects; QuantContext uses a configurable lookback without the skip.
+
+### value_screen
+
+Ranks stocks by valuation metrics (PE ratio or a composite score) and keeps the cheapest N stocks. Lower PE = higher rank. Stocks with negative earnings (undefined PE) are excluded.
+
+**Academic context:** The value premium — that cheap stocks outperform expensive ones — was documented by Fama & French (1993) as the HML factor. Historical long-short returns: ~3-5% annually. Whether this is compensation for distress risk or behavioral overreaction remains debated. The Fama-French 5-factor model (2015) showed HML is largely spanned by profitability (RMW) and investment (CMA) factors — its information is captured by the other two, though the value premium itself still exists. McLean & Pontiff (2016) showed factor returns decline ~58% after academic publication as capital exploits them.
+
+### factor_model
+
+Constructs a multi-factor composite z-score for each stock, then ranks by that score. The composite combines four dimensions with configurable weights:
+
+$$
+\text{Score}_i = w_v \cdot z_{\text{value},i} + w_m \cdot z_{\text{momentum},i} + w_q \cdot z_{\text{quality},i} + w_\sigma \cdot z_{\text{volatility},i}
+$$
+
+Each sub-score is a cross-sectional z-score (mean-centered, divided by standard deviation) computed across the universe. The volatility factor is inverted so that lower volatility yields a higher score. Default weights give equal emphasis to each factor, but you can tilt toward any dimension.
+
+### technical_signal
+
+Scores stocks using three classic technical indicators:
+
+- **RSI (Relative Strength Index):** A 14-day RSI below 30 signals oversold conditions (bullish); above 70 signals overbought (bearish). The score contribution is highest when RSI is most extreme.
+- **SMA crossover:** Compares the 50-day simple moving average to the 200-day SMA. A bullish signal ("golden cross") fires when the 50-day is above the 200-day.
+- **Bollinger Band position:** Measures where the current price sits relative to the 20-day Bollinger Bands (2 standard deviations). Prices near the lower band score higher (potential mean reversion upward).
+
+The three signals are combined into a single composite score per stock.
+
+### mean_reversion
+
+Computes a z-score of the current price relative to its rolling mean, then selects stocks trading below a threshold:
+
+$$
+z_i = \frac{P_i - \mu_{i,N}}{\sigma_{i,N}}
+$$
+
+Where $\mu_{i,N}$ and $\sigma_{i,N}$ are the rolling mean and standard deviation over $N$ days. A stock with $z < -2.0$ is trading 2 standard deviations below its recent average — a potential mean-reversion buy signal. The threshold is configurable.
+
+---
+
+## Backtesting Engine
+
+The `backtest_strategy` tool runs a **rebalance-loop simulation** over historical data. This is the same structure used by most institutional backtesting frameworks.
+
+### Simulation Loop
+
+The backtest proceeds in two nested loops:
+
+**1. Generate rebalance dates.** Based on the chosen frequency (daily, weekly, monthly, or quarterly), the engine generates a schedule of dates on which the portfolio is rebalanced.
+
+**2. On each rebalance date:**
+   - Run the screening pipeline to produce a list of candidate stocks.
+   - Size positions according to the chosen method (equal-weight or inverse-volatility).
+   - Sell any existing positions not in the new target portfolio.
+   - Buy or adjust positions to match target weights.
+
+**3. Between rebalances (daily):**
+   - Mark-to-market the portfolio using closing prices.
+   - Check per-position stop-losses and exit any triggered positions.
+   - Check the portfolio-level max drawdown circuit breaker. If triggered, liquidate everything.
+
+### Position Sizing
+
+**Equal weight:**
+
+$$
+w_i = \frac{1}{N}
+$$
+
+Each of the $N$ candidate stocks receives the same allocation. Simple, transparent, and avoids concentration risk. DeMiguel, Garlappi, Uppal (2009) showed that naive 1/N allocation is surprisingly hard to beat out-of-sample due to estimation error in more sophisticated methods.
+
+**Inverse volatility:**
+
+$$
+w_i = \frac{1/\sigma_i}{\sum_{j=1}^{N} 1/\sigma_j}
+$$
+
+Where $\sigma_i$ is the 20-day realized volatility (annualized standard deviation of daily returns) for stock $i$. Lower-volatility stocks get larger weights. This tends to produce smoother portfolio returns than equal weighting.
+
+**Academic context:** Inverse-volatility weighting is a simplified form of risk-based portfolio construction in the family of risk parity methods (Maillard, Roncalli, Teiletche 2010). True risk parity equalizes *risk contributions* ($w_i \cdot (\Sigma w)_i$), which accounts for correlations. Inverse-volatility ignores correlations — it is equivalent to risk parity only when all pairwise correlations are identical. Despite this simplification, it often outperforms equal-weight in practice because it implicitly tilts toward the low-volatility anomaly (~1-3% risk-adjusted alpha per Frazzini & Pedersen 2014).
+
+### Risk Controls
+
+| Control | Behavior |
+|---------|----------|
+| **Position size cap** | No single position can exceed a maximum weight (e.g., 20%). Excess weight is redistributed pro-rata across remaining positions. |
+| **Per-position stop-loss** | If a position's return from entry falls below a negative threshold (e.g., -15%), it is sold immediately. |
+| **Max drawdown circuit breaker** | If the portfolio's drawdown from its peak exceeds a limit (e.g., -25%), all positions are liquidated and the strategy stays in cash. |
+
+### Performance Metrics
+
+Every backtest returns a standard set of performance metrics. Here is how each one is computed.
+
+**Total Return:**
+
+$$
+R_{\text{total}} = \frac{V_T}{V_0} - 1
+$$
+
+Where $V_T$ is the final portfolio value and $V_0$ is the initial capital.
+
+**CAGR (Compound Annual Growth Rate):**
+
+$$
+\text{CAGR} = \left(\frac{V_T}{V_0}\right)^{1/Y} - 1
+$$
+
+Where $Y$ is the number of years in the backtest period.
+
+**Sharpe Ratio:**
+
+$$
+\text{Sharpe} = \sqrt{252} \times \frac{\bar{r}}{\sigma_r}
+$$
+
+Where $\bar{r}$ is the mean daily return and $\sigma_r$ is the standard deviation of daily returns. The $\sqrt{252}$ factor annualizes the ratio. We assume a zero risk-free rate for simplicity. This overstates Sharpe when risk-free rates are materially above zero; use the factor analysis tool (which does subtract $R_f$) for a more precise decomposition.
+
+**Limitation:** The Sharpe ratio penalizes upside and downside volatility equally. The Sortino ratio ($= (R_p - R_f) / \sigma_{\text{downside}}$) only penalizes downside volatility and may be more appropriate for asymmetric return distributions. QuantContext reports Sharpe as the industry standard; the Fundamental Law of Active Management (Grinold 1989) connects it to skill: $\text{IR} \approx \text{IC} \times \sqrt{\text{Breadth}}$.
+
+**Max Drawdown:**
+
+$$
+\text{MDD} = \min_t \left(\frac{V_t - \max_{\tau \leq t} V_\tau}{\max_{\tau \leq t} V_\tau}\right)
+$$
+
+The largest peak-to-trough decline over the entire backtest period. Expressed as a negative percentage.
+
+**Calmar Ratio:**
+
+$$
+\text{Calmar} = \frac{\text{CAGR}}{|\text{MDD}|}
+$$
+
+Measures return per unit of drawdown risk. Higher is better. A Calmar above 1.0 means the strategy's annualized return exceeds its worst drawdown.
+
+**Daily Win Rate:**
+
+$$
+\text{Win Rate} = \frac{\#\{r_t > 0\}}{T}
+$$
+
+The fraction of trading days with a positive return. Note: this is a daily metric, not a per-trade metric. A win rate above 53% is generally considered good for a daily strategy.
+
+**Turnover:**
+
+$$
+\text{Turnover} = \frac{\sum_t |\text{Traded Value}_t|}{\bar{V} \times Y}
+$$
+
+Total traded value divided by average portfolio value divided by years. Higher turnover means more frequent trading, which implies higher transaction costs in live trading.
+
+---
+
+## Factor Analysis (Fama-French Regression)
+
+The `analyze_factors` tool performs a Fama-French 4-factor regression on any backtest result. This is the most rigorous section — it tells you **where your returns actually come from**.
+
+### What Are Fama-French Factors?
+
+Most stock returns can be explained by exposure to common risk factors rather than stock-specific skill (Fama & French 1993, Carhart 1997). If your "alpha" disappears once you account for known factors, the strategy is harvesting risk premia, not generating genuine excess return.
+
+### The 4-Factor Model
+
+$$
+R_p - R_f = \alpha + \beta_1(R_m - R_f) + \beta_2 \cdot \text{SMB} + \beta_3 \cdot \text{HML} + \beta_4 \cdot \text{Mom} + \epsilon
+$$
+
+Each term has a precise meaning:
+
+| Term | Name | Interpretation |
+|------|------|---------------|
+| $R_p - R_f$ | Portfolio excess return | Your strategy's daily return minus the risk-free rate |
+| $R_m - R_f$ | Market excess return (Mkt-RF) | Broad equity market return minus risk-free rate. $\beta_1 = 1.0$ means your strategy moves 1:1 with the market. |
+| SMB | Small Minus Big | Long small-cap, short large-cap. Positive loading means the strategy tilts toward smaller stocks. |
+| HML | High Minus Low | Long high book-to-market (value), short low book-to-market (growth). Positive loading means the strategy tilts toward value stocks. |
+| Mom | Momentum | Winners minus losers over the past 12 months (skipping the most recent month). Positive loading means the strategy tends to buy recent winners. |
+| $\alpha$ | Alpha (intercept) | Return **not explained** by any factor. This is what active managers claim to generate. |
+| $\epsilon$ | Residual | Unexplained noise — the part of returns that is neither systematic factor exposure nor consistent alpha. |
+
+### How We Compute It
+
+We perform manual OLS regression without external statistics libraries (no `statsmodels` dependency). Here is the exact procedure:
+
+**Step 1: Compute portfolio returns.** Convert the daily equity curve from the backtest into a series of daily percentage returns.
+
+**Step 2: Download factor data.** Fetch Fama-French daily factor returns from the Kenneth French Data Library for the same date range as the backtest.
+
+**Step 3: Align dates.** Inner-join the portfolio returns with the factor data on date. Only days present in both series are used.
+
+**Step 4: Run OLS.** Construct the regression:
+
+$$
+\boldsymbol{\beta} = (\mathbf{X}^{\top}\mathbf{X})^{-1}\mathbf{X}^{\top}\mathbf{y}
+$$
+
+Where $\mathbf{X} = [\mathbf{1}, \text{Mkt-RF}, \text{SMB}, \text{HML}, \text{Mom}]$ (an $n \times 5$ matrix with a column of ones for the intercept) and $\mathbf{y}$ is the vector of portfolio excess returns ($R_p - R_f$).
+
+**Step 5: Compute t-statistics.**
+
+$$
+t_j = \frac{\beta_j}{\text{se}(\beta_j)}, \quad \text{where} \quad \text{se}(\beta_j) = \sqrt{\hat{\sigma}^2 \cdot [(\mathbf{X}^{\top}\mathbf{X})^{-1}]_{jj}}
+$$
+
+and $\hat{\sigma}^2 = \frac{\mathbf{e}^{\top}\mathbf{e}}{n - k}$ is the residual variance ($n$ = number of observations, $k$ = number of regressors including the intercept).
+
+**Step 6: Compute R-squared.**
+
+$$
+R^2 = 1 - \frac{SS_{\text{res}}}{SS_{\text{tot}}} = 1 - \frac{\sum_t (y_t - \hat{y}_t)^2}{\sum_t (y_t - \bar{y})^2}
+$$
+
+### Interpreting Results
+
+**Alpha.** The daily alpha from the regression is annualized as:
+
+$$
+\alpha_{\text{annual}} = (1 + \alpha_{\text{daily}})^{252} - 1
+$$
+
+A positive alpha with $|t| > 2$ (roughly 95% confidence) suggests returns beyond factor exposure alone. For strategies discovered through extensive parameter search, Harvey, Liu & Zhu (2016) recommend $t > 3.0$ after multiple testing correction.
+
+**Factor loadings.** These tell you *where* your returns come from:
+- High $\beta_1$ (Mkt-RF) means you are mostly just riding the broad market. A long-only equity strategy will typically have $\beta_1$ between 0.8 and 1.2.
+- Positive $\beta_2$ (SMB) means your portfolio tilts toward small-caps.
+- Positive $\beta_3$ (HML) means your portfolio tilts toward value stocks. If you built a "value screen," you should expect a positive HML loading — that confirms the screen is working.
+- Positive $\beta_4$ (Mom) means your portfolio tends to hold recent winners.
+
+**R-squared.** How much of your return variance is explained by the four factors.
+- $R^2 = 0.95$ means 95% of your strategy's daily movement is attributable to factor exposure. Only 5% is alpha or idiosyncratic risk.
+- $R^2 = 0.50$ means the factors explain half your variance — the strategy has significant idiosyncratic behavior.
+- Most long-only equity strategies will have $R^2$ between 0.80 and 0.95.
+
+**Residual volatility.** The annualized standard deviation of the regression residuals ($\epsilon$):
+
+$$
+\sigma_{\epsilon,\text{annual}} = \sqrt{252} \times \text{std}(\epsilon)
+$$
+
+Lower residual volatility means returns are mostly systematic. Higher means more idiosyncratic risk. Neither is inherently good or bad — it depends on whether the idiosyncratic component generates positive alpha.
+
+### Data Source
+
+Factor returns come from the [Kenneth French Data Library](https://mba.tuck.dartmouth.edu/pages/faculty/ken.french/data_library.html). Daily returns back to 1926 for US equity factors.
+
+---
+
+## Limitations and Caveats
+
+**A backtest is not evidence of a strategy.** QuantContext is a research tool, not a trading system. Key limitations to keep in mind:
+
+- **Survivorship bias**: Universe lists reflect *current* index constituents. Stocks that were delisted or removed from the index before today are not included in historical simulations. This systematically inflates backtest returns.
+- **Look-ahead bias**: Fundamental data (PE ratios, revenue growth) uses the most recently available snapshot, not point-in-time data. In live trading, this data would not have been available at the historical dates simulated.
+- **Transaction costs**: The backtester does not model commissions, slippage, bid-ask spreads, or market impact. Real-world turnover costs can be significant, especially for high-frequency rebalancing or small-cap strategies.
+- **Factor premia are not guaranteed**: Historical factor premia may not persist. McLean & Pontiff (2016) showed ~58% decay post-publication. The factor zoo problem (Harvey, Liu, Zhu 2016) means many published factors are likely false discoveries.
+- **Estimation error in covariance**: The inverse-volatility weighting uses a 20-day realized volatility window. Short lookback windows are noisy; longer windows are stale. Ledoit & Wolf (2004) showed that shrinkage estimators significantly improve covariance estimation, but QuantContext uses raw sample estimates for simplicity.
+
+---
+
+## References
+
+### Factor Models
+- Fama, E. & French, K. (1993). "Common Risk Factors in the Returns on Stocks and Bonds." *Journal of Financial Economics*.
+- Carhart, M. (1997). "On Persistence in Mutual Fund Performance." *Journal of Finance*.
+- Fama, E. & French, K. (2015). "A Five-Factor Asset Pricing Model." *Journal of Financial Economics*.
+- Harvey, C., Liu, Y. & Zhu, H. (2016). "...and the Cross-Section of Expected Returns." *Review of Financial Studies*.
+- McLean, R.D. & Pontiff, J. (2016). "Does Academic Research Destroy Stock Return Predictability?" *Journal of Finance*.
+- Jegadeesh, N. & Titman, S. (1993). "Returns to Buying Winners and Selling Losers." *Journal of Finance*.
+
+### Portfolio Construction
+- Markowitz, H. (1952). "Portfolio Selection." *Journal of Finance*.
+- DeMiguel, V., Garlappi, L. & Uppal, R. (2009). "Optimal Versus Naive Diversification." *Review of Financial Studies*.
+- Maillard, S., Roncalli, T. & Teiletche, J. (2010). "Properties of Equally Weighted Risk Contribution Portfolios." *Journal of Portfolio Management*.
+- Black, F. & Litterman, R. (1992). "Global Portfolio Optimization." *Financial Analysts Journal*.
+- Ledoit, O. & Wolf, M. (2004). "A Well-Conditioned Estimator for Large-Dimensional Covariance Matrices." *Journal of Multivariate Analysis*.
+
+### Risk and Performance
+- Artzner, P. et al. (1999). "Coherent Measures of Risk." *Mathematical Finance*.
+- Frazzini, A. & Pedersen, L. (2014). "Betting Against Beta." *Journal of Financial Economics*.
+- Grinold, R. (1989). "The Fundamental Law of Active Management." *Journal of Portfolio Management*.

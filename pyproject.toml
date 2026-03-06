@@ -6,7 +6,7 @@ readme = "README.md"
 license = "MIT"
 requires-python = ">=3.10"
 authors = [
-    { name = "Zomma", email = "hello@zomma.ai" },
+    { name = "Zomma", email = "hello@zommalabs.com" },
 ]
 keywords = ["mcp", "trading", "quant", "backtest", "factor-analysis", "ai-agent", "finance"]
 classifiers = [
@@ -32,7 +32,7 @@ quantcontext = "quantcontext.server:main"
 [project.urls]
 Homepage = "https://quantcontext.ai"
 Repository = "https://github.com/jihjihk/quantcontext-mcp-server"
-Documentation = "https://quantcontext.dev/docs"
+Documentation = "https://docs.quantcontext.ai"
 
 [build-system]
 requires = ["hatchling"]

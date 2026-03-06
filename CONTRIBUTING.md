@@ -5,7 +5,7 @@ Thanks for your interest in contributing to QuantContext!
 ## Development Setup
 
 ```bash
-git clone https://github.com/zomma-ai/quantcontext-mcp-server.git
+git clone https://github.com/jihjihk/quantcontext-mcp-server.git
 cd quantcontext-mcp-server
 python -m venv .venv
 source .venv/bin/activate

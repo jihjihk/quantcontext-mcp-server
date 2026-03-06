@@ -113,7 +113,7 @@ def run_backtest(pipeline: dict, config: dict) -> dict:
         _, cands = execute_pipeline(pipeline, rd.strftime("%Y-%m-%d"))
         if "ticker" in cands.columns:
             all_tickers.extend(cands["ticker"].tolist())
-    all_tickers = list(set(all_tickers))
+    all_tickers = sorted(set(all_tickers))
 
     if not all_tickers:
         return {"equity_curve": [], "trades": [], "metrics": {}, "holdings_over_time": [], "stage_results_by_date": {}}
@@ -309,13 +309,12 @@ def _compute_metrics(equity_curve: list[dict], initial_capital: float, trades: l
     # Calmar
     calmar = float(cagr / abs(max_drawdown)) if max_drawdown != 0 else 0
 
-    # Win rate (per-trade, not per-day)
+    # Daily win rate: fraction of days with positive returns
     buy_trades = [t for t in trades if t["action"] == "BUY"]
     sell_trades = [t for t in trades if t["action"] == "SELL"]
-    win_rate = 0.0
+    daily_win_rate = 0.0
     if buy_trades and sell_trades:
-        # Simplified: count positive daily returns as proxy
-        win_rate = float((daily_returns > 0).mean())
+        daily_win_rate = float((daily_returns > 0).mean())
 
     # Turnover: total traded value / avg portfolio value
     total_traded = sum(abs(t.get("shares", 0) * t.get("price", 0)) for t in trades)
@@ -328,7 +327,7 @@ def _compute_metrics(equity_curve: list[dict], initial_capital: float, trades: l
         "sharpe": round(sharpe, 2),
         "max_drawdown": round(float(max_drawdown), 4),
         "calmar": round(calmar, 2),
-        "win_rate": round(win_rate, 4),
+        "daily_win_rate": round(daily_win_rate, 4),
         "turnover": round(turnover, 2),
         "total_trades": len(trades),
     }

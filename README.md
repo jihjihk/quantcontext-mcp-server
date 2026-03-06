@@ -72,7 +72,7 @@ Three tools. One conversation. Every number computed from real market data.
 | Screen | Parameters | Description |
 |--------|-----------|-------------|
 | `fundamental_screen` | `pe_lt`, `roe_gt`, `debt_equity_lt`, `revenue_growth_gt` | Filter by PE, ROE, leverage, growth |
-| `quality_screen` | `roe_gt`, `debt_equity_lt`, `profit_margin_gt` | High-quality companies |
+| `quality_screen` | `roe_gt`, `debt_equity_lt`, `profit_margin_gt` | Profitability + balance sheet health |
 | `momentum_screen` | `lookback_days`, `top_pct` | Rank by N-day price momentum |
 | `value_screen` | `pe_lt`, `top_n` | Cheapest stocks by valuation |
 | `factor_model` | `weights` (value/momentum/quality/volatility), `top_n` | Multi-factor composite ranking |
@@ -94,7 +94,7 @@ All data is cached locally (~50MB for full coverage). First query downloads data
 - [Example Workflows](docs/examples.md) — 3 complete multi-tool workflows
 - [Architecture](docs/architecture.md) — how deterministic compute works
 - [PyPI](https://pypi.org/project/quantcontext-mcp/)
-- [GitHub](https://github.com/zomma-ai/quantcontext-mcp-server)
+- [GitHub](https://github.com/jihjihk/quantcontext-mcp-server)
 
 ## License
 

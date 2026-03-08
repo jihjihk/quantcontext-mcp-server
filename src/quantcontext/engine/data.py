@@ -332,11 +332,15 @@ def fetch_financials(ticker: str) -> dict:
     return result
 
 
-def enrich_with_price_data(df: pd.DataFrame, date: str) -> pd.DataFrame:
+def enrich_with_price_data(df: pd.DataFrame, date: str, *, prices: pd.DataFrame | None = None) -> pd.DataFrame:
     """Enrich a universe DataFrame with price-derived columns.
 
     Downloads ~300 days of price history ending at *date* for each ticker
     in *df* and computes momentum, volatility, and technical indicators.
+
+    When *prices* is provided it is sliced to the needed date range instead
+    of calling ``fetch_prices``, avoiding redundant cache reads during
+    backtests that have already pre-fetched all prices.
     """
     import numpy as np
 
@@ -347,10 +351,14 @@ def enrich_with_price_data(df: pd.DataFrame, date: str) -> pd.DataFrame:
     end_ts = pd.Timestamp(date)
     start_ts = end_ts - pd.Timedelta(days=420)  # ~300 trading days buffer
 
-    try:
-        prices = fetch_prices(tickers, start_ts.strftime("%Y-%m-%d"), date)
-    except Exception:
-        return df
+    if prices is not None:
+        # Use pre-fetched prices: slice to the needed date range
+        prices = _filter_prices(prices, tickers, start_ts.strftime("%Y-%m-%d"), date)
+    else:
+        try:
+            prices = fetch_prices(tickers, start_ts.strftime("%Y-%m-%d"), date)
+        except Exception:
+            return df
 
     # Build a dict of ticker -> computed values
     records: dict[str, dict] = {}
@@ -430,7 +438,7 @@ def enrich_with_price_data(df: pd.DataFrame, date: str) -> pd.DataFrame:
     return df
 
 
-def get_universe(date: str, universe: str = "sp500", fundamentals: bool = True) -> pd.DataFrame:
+def get_universe(date: str, universe: str = "sp500", fundamentals: bool = True, *, enrich: bool = True, prices: pd.DataFrame | None = None) -> pd.DataFrame:
     """Return a DataFrame of all tickers in the universe.
 
     When fundamentals=True (default): fetches PE, ROE, D/E, etc. from yfinance per ticker.
@@ -449,7 +457,8 @@ def get_universe(date: str, universe: str = "sp500", fundamentals: bool = True) 
     if not fundamentals:
         # Price-only path: one batch yfinance download, no per-ticker API calls
         df = pd.DataFrame({"ticker": tickers})
-        df = enrich_with_price_data(df, date)
+        if enrich:
+            df = enrich_with_price_data(df, date, prices=prices)
         return df
 
     rows = []
@@ -461,7 +470,8 @@ def get_universe(date: str, universe: str = "sp500", fundamentals: bool = True) 
             continue
 
     df = pd.DataFrame(rows)
-    df = enrich_with_price_data(df, date)
+    if enrich:
+        df = enrich_with_price_data(df, date, prices=prices)
     return df
 
 

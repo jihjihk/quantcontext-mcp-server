@@ -116,7 +116,7 @@ def _universe_row(ticker: str, date: str) -> dict:
     return rec
 
 
-def _get_universe(date: str, universe: str = "sp500", fundamentals: bool = True) -> pd.DataFrame:
+def _get_universe(date: str, universe: str = "sp500", fundamentals: bool = True, *, enrich: bool = True, prices: pd.DataFrame | None = None) -> pd.DataFrame:
     tickers = _SP500 if universe != "nasdaq100" else _NASDAQ100
     return pd.DataFrame([_universe_row(t, date) for t in tickers])
 

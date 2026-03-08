@@ -9,7 +9,7 @@ import datetime
 import numpy as np
 import pandas as pd
 
-from quantcontext.engine.data import fetch_prices
+from quantcontext.engine.data import fetch_prices, fetch_sp500_tickers, fetch_nasdaq100_tickers, fetch_russell2000_tickers, FALLBACK_SP500_TICKERS
 from quantcontext.engine.pipeline_executor import execute_pipeline
 
 
@@ -94,12 +94,13 @@ _ZERO_METRICS = {
 }
 
 
-def run_backtest(pipeline: dict, config: dict) -> dict:
+def run_backtest(pipeline: dict, config: dict, *, progress_callback=None) -> dict:
     """Run a deterministic backtest.
 
     Args:
         pipeline: Pipeline spec with stages, universe, risk_limits
         config: {start_date, end_date, initial_capital, rebalance, sizing}
+        progress_callback: Optional callable(current, total, message) for progress updates.
 
     Returns:
         {equity_curve, trades, metrics, holdings_over_time, stage_results_by_date}
@@ -117,22 +118,31 @@ def run_backtest(pipeline: dict, config: dict) -> dict:
     if not rebal_dates:
         return {"equity_curve": [], "trades": [], "metrics": _ZERO_METRICS, "holdings_over_time": [], "stage_results_by_date": {}}
 
-    # Run pipeline once to discover tickers we'll need prices for
-    _, initial_candidates = execute_pipeline(pipeline, rebal_dates[0].strftime("%Y-%m-%d"))
-    all_tickers = initial_candidates["ticker"].tolist() if "ticker" in initial_candidates.columns else []
+    def _progress(current: int, total: int, msg: str) -> None:
+        if progress_callback is not None:
+            progress_callback(current, total, msg)
 
-    # Expand: run pipeline on a few dates to discover all possible tickers
-    for rd in rebal_dates[:3]:
-        _, cands = execute_pipeline(pipeline, rd.strftime("%Y-%m-%d"))
-        if "ticker" in cands.columns:
-            all_tickers.extend(cands["ticker"].tolist())
-    all_tickers = sorted(set(all_tickers))
+    # Ticker discovery: use the full universe list directly.
+    # No need to run the pipeline (which fetches fundamentals + price indicators)
+    # just to learn which tickers exist — the actual screening happens at each
+    # rebalance date below.
+    universe_name = pipeline.get("universe", "sp500")
+    _progress(0, 100, f"Loading {universe_name} universe…")
+    if universe_name == "sp500":
+        all_tickers = sorted(set(fetch_sp500_tickers()))
+    elif universe_name == "nasdaq100":
+        all_tickers = sorted(set(fetch_nasdaq100_tickers()))
+    elif universe_name == "russell2000":
+        all_tickers = sorted(set(fetch_russell2000_tickers()))
+    else:
+        all_tickers = sorted(set(FALLBACK_SP500_TICKERS[:90]))
 
     if not all_tickers:
         return {"equity_curve": [], "trades": [], "metrics": _ZERO_METRICS, "holdings_over_time": [], "stage_results_by_date": {}}
 
     # Fetch all prices at once; forward-fill gaps (handles delistings, data holes)
     # Without ffill, NaN prices cause positions to silently drop to $0 mid-backtest
+    _progress(5, 100, f"Fetching prices for {len(all_tickers)} tickers…")
     prices = fetch_prices(all_tickers, start, end)
     prices = prices.ffill()
 
@@ -151,10 +161,17 @@ def run_backtest(pipeline: dict, config: dict) -> dict:
     stage_results_by_date: dict[str, list[dict]] = {}
     peak_value = float(initial_capital)
     in_cash_circuit_breaker = False
+    # Shared cache so fundamentals are fetched once, not per-rebalance date
+    universe_cache: dict = {}
 
     rebal_set = set(rebal_dates)
+    n_trading_days = len(trading_dates)
+    n_rebal = len(rebal_dates)
+    rebal_done = 0
 
-    for date in trading_dates:
+    _progress(15, 100, f"Running backtest: {n_trading_days} trading days, {n_rebal} rebalance dates…")
+
+    for day_idx, date in enumerate(trading_dates):
         date_str = date.strftime("%Y-%m-%d")
 
         # Current portfolio value
@@ -199,7 +216,11 @@ def run_backtest(pipeline: dict, config: dict) -> dict:
 
         # Rebalance
         if date in rebal_set and not in_cash_circuit_breaker:
-            stage_results, candidates = execute_pipeline(pipeline, date_str)
+            rebal_done += 1
+            # Progress: 15-90% maps to rebalance progress (where the real work is)
+            pct = 15 + int(75 * rebal_done / n_rebal)
+            _progress(pct, 100, f"Rebalancing {rebal_done}/{n_rebal}: {date_str}")
+            stage_results, candidates = execute_pipeline(pipeline, date_str, _universe_cache=universe_cache, _prices=prices)
             stage_results_by_date[date_str] = stage_results
 
             if "ticker" not in candidates.columns or len(candidates) == 0:
@@ -294,6 +315,7 @@ def run_backtest(pipeline: dict, config: dict) -> dict:
         equity_curve.append({"date": date_str, "value": round(float(portfolio_value), 2)})
 
     # Compute metrics
+    _progress(95, 100, "Computing metrics…")
     metrics = _compute_metrics(equity_curve, initial_capital, trades)
 
     return {

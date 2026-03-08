@@ -152,15 +152,19 @@ def run_backtest(pipeline: dict, config: dict, *, progress_callback=None) -> dic
         else:
             break  # stop at first price-dependent stage
 
+    # Shared cache so fundamentals are fetched once, not per-rebalance date.
+    # The pre-scan (if any) populates this cache; the main loop reuses it
+    # to guarantee both see identical fundamental data.
+    universe_cache: dict = {}
+
     price_tickers = all_tickers
     if pre_scan_stages:
         _progress(3, 100, f"Pre-scanning {len(rebal_dates)} rebalance dates to narrow universe…")
         pre_scan_pipeline = {**pipeline, "stages": pre_scan_stages}
-        pre_scan_cache: dict = {}
         candidate_tickers: set[str] = set()
         for date in rebal_dates:
             date_str = date.strftime("%Y-%m-%d")
-            _, candidates = execute_pipeline(pre_scan_pipeline, date_str, _universe_cache=pre_scan_cache)
+            _, candidates = execute_pipeline(pre_scan_pipeline, date_str, _universe_cache=universe_cache)
             if "ticker" in candidates.columns:
                 candidate_tickers.update(candidates["ticker"].tolist())
         if candidate_tickers:
@@ -187,8 +191,6 @@ def run_backtest(pipeline: dict, config: dict, *, progress_callback=None) -> dic
     stage_results_by_date: dict[str, list[dict]] = {}
     peak_value = float(initial_capital)
     in_cash_circuit_breaker = False
-    # Shared cache so fundamentals are fetched once, not per-rebalance date
-    universe_cache: dict = {}
 
     rebal_set = set(rebal_dates)
     n_trading_days = len(trading_dates)

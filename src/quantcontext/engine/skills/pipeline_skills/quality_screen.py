@@ -10,6 +10,7 @@ SKILL_META = {
         "margin_gt": {"type": "float", "description": "Min profit margin"},
     },
     "description": "Filter by quality metrics (ROE, debt, margins)",
+    "needs_price_enrichment": False,
 }
 
 def run(universe: pd.DataFrame, config: dict, date: str) -> pd.DataFrame:

@@ -11,6 +11,7 @@ SKILL_META = {
         "top_pct": {"type": "float", "description": "Keep top X% of stocks by return"},
     },
     "description": "Rank by N-day price return, keep top percentile",
+    "needs_price_enrichment": True,
 }
 
 def run(universe: pd.DataFrame, config: dict, date: str) -> pd.DataFrame:

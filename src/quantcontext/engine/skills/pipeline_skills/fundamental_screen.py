@@ -12,6 +12,7 @@ SKILL_META = {
         "rev_growth_gt": {"type": "float", "description": "Min revenue growth (decimal)"},
     },
     "description": "Filter stocks by fundamental thresholds (PE, ROE, D/E, revenue growth)",
+    "needs_price_enrichment": False,
 }
 
 

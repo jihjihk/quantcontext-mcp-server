@@ -10,6 +10,7 @@ SKILL_META = {
         "top_n": {"type": "int", "description": "Keep top N cheapest stocks"},
     },
     "description": "Composite value scoring (PE, PB, EV/EBITDA), keep cheapest",
+    "needs_price_enrichment": False,
 }
 
 def run(universe: pd.DataFrame, config: dict, date: str) -> pd.DataFrame:

@@ -11,6 +11,7 @@ SKILL_META = {
         "top_n": {"type": "int", "description": "Keep top N scoring stocks"},
     },
     "description": "Multi-factor z-score ranking with configurable weights",
+    "needs_price_enrichment": True,
 }
 
 def _z_score(series: pd.Series) -> pd.Series:

@@ -12,6 +12,7 @@ SKILL_META = {
         "rsi_overbought": {"type": "float", "description": "RSI overbought threshold (default 70)"},
     },
     "description": "Score stocks by technical indicators",
+    "needs_price_enrichment": True,
 }
 
 def run(universe: pd.DataFrame, config: dict, date: str) -> pd.DataFrame:

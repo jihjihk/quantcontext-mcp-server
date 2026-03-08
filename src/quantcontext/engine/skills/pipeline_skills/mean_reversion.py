@@ -10,6 +10,7 @@ SKILL_META = {
         "lookback": {"type": "int", "description": "Rolling window in days"},
     },
     "description": "Z-score from rolling mean, buy below threshold",
+    "needs_price_enrichment": True,
 }
 
 def run(universe: pd.DataFrame, config: dict, date: str) -> pd.DataFrame:

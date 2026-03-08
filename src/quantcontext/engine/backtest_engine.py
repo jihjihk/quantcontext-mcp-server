@@ -11,6 +11,7 @@ import pandas as pd
 
 from quantcontext.engine.data import fetch_prices, fetch_sp500_tickers, fetch_nasdaq100_tickers, fetch_russell2000_tickers, FALLBACK_SP500_TICKERS
 from quantcontext.engine.pipeline_executor import execute_pipeline
+from quantcontext.engine.skills.pipeline_skills.registry import SKILL_REGISTRY
 
 
 def _rebalance_dates(start: str, end: str, freq: str) -> list[pd.Timestamp]:
@@ -122,10 +123,7 @@ def run_backtest(pipeline: dict, config: dict, *, progress_callback=None) -> dic
         if progress_callback is not None:
             progress_callback(current, total, msg)
 
-    # Ticker discovery: use the full universe list directly.
-    # No need to run the pipeline (which fetches fundamentals + price indicators)
-    # just to learn which tickers exist — the actual screening happens at each
-    # rebalance date below.
+    # Ticker discovery
     universe_name = pipeline.get("universe", "sp500")
     _progress(0, 100, f"Loading {universe_name} universe…")
     if universe_name == "sp500":
@@ -140,10 +138,38 @@ def run_backtest(pipeline: dict, config: dict, *, progress_callback=None) -> dic
     if not all_tickers:
         return {"equity_curve": [], "trades": [], "metrics": _ZERO_METRICS, "holdings_over_time": [], "stage_results_by_date": {}}
 
-    # Fetch all prices at once; forward-fill gaps (handles delistings, data holes)
-    # Without ffill, NaN prices cause positions to silently drop to $0 mid-backtest
-    _progress(5, 100, f"Fetching prices for {len(all_tickers)} tickers…")
-    prices = fetch_prices(all_tickers, start, end)
+    # Pre-scan: identify which stages can run without price data.
+    # If the leading stages are fundamental-only, run them across all
+    # rebalance dates to discover candidate tickers *before* fetching prices.
+    # This shrinks the price download from ~500 tickers to ~50-100.
+    stages = sorted(pipeline.get("stages", []), key=lambda s: s.get("order", 0))
+    pre_scan_stages = []
+    for s in stages:
+        skill_id = s.get("skill", "")
+        needs_price = SKILL_REGISTRY.get(skill_id, {}).get("meta", {}).get("needs_price_enrichment", True)
+        if not needs_price:
+            pre_scan_stages.append(s)
+        else:
+            break  # stop at first price-dependent stage
+
+    price_tickers = all_tickers
+    if pre_scan_stages:
+        _progress(3, 100, f"Pre-scanning {len(rebal_dates)} rebalance dates to narrow universe…")
+        pre_scan_pipeline = {**pipeline, "stages": pre_scan_stages}
+        pre_scan_cache: dict = {}
+        candidate_tickers: set[str] = set()
+        for date in rebal_dates:
+            date_str = date.strftime("%Y-%m-%d")
+            _, candidates = execute_pipeline(pre_scan_pipeline, date_str, _universe_cache=pre_scan_cache)
+            if "ticker" in candidates.columns:
+                candidate_tickers.update(candidates["ticker"].tolist())
+        if candidate_tickers:
+            price_tickers = sorted(candidate_tickers)
+            _progress(5, 100, f"Pre-scan narrowed {len(all_tickers)} → {len(price_tickers)} tickers")
+
+    # Fetch prices only for candidate tickers; forward-fill gaps
+    _progress(7, 100, f"Fetching prices for {len(price_tickers)} tickers…")
+    prices = fetch_prices(price_tickers, start, end)
     prices = prices.ffill()
 
     # Trading dates = all business days where we have price data
